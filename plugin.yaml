@@ -1,0 +1,36 @@
+# tripo — Tripo3D's API for agents: 3D models from text, an image or
+# multiview images, then texture, rig, animate, retopologize, re-UV, segment
+# and convert them. kind MUST stay "integration": the plugin writes outputs
+# into workspace artifacts with provenance, records spend and wakes agents
+# when a long task lands — in-process facilities a catalog "tool" plugin
+# (out of process, flat schemas) does not get.
+name: tripo
+version: 0.1.0
+kind: integration
+description: Tripo 3D for agents — models from text, an image or several views, then texture, rig, animation, retopology and format conversion. Results land in the task's artifacts.
+entry: index.mjs
+requires_env:
+  - TRIPO_API_KEY   # managed credential: Settings → Integrations → Tripo
+config_schema:
+  type: object
+  properties:
+    api_key:
+      type: string
+      title: API key
+      secret: true
+      credential: TRIPO_API_KEY
+      placeholder: "${TRIPO_API_KEY}"
+      description: Leave empty to use the Tripo key from Settings → Integrations
+    default_wait_s:
+      type: integer
+      title: Wait before handing back, s
+      default: 240
+      minimum: 10
+      maximum: 1500
+      description: How long tripo_run waits for a result before returning the task id (the agent is woken when it lands)
+    low_balance_credits:
+      type: number
+      title: Low balance, credits
+      default: 300
+      minimum: 0
+      description: Below this the balance tile is marked as running out (1 credit = $0.01)
