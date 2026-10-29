@@ -72,6 +72,19 @@ const EXT_BY_TYPE = {
 };
 const IMAGE_TYPE = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp" };
 
+/** A file's format from its first bytes; null when they say nothing (the URL and the content type decide then). */
+function sniff(buf, urlExt) {
+  const ascii = (a, b) => buf.toString("latin1", a, b);
+  if (buf.length >= 8 && buf[0] === 0x89 && ascii(1, 4) === "PNG") return "png";
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "jpg";
+  if (buf.length >= 12 && ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP") return "webp";
+  if (buf.length >= 4 && ascii(0, 4) === "glTF") return "glb";
+  if (buf.length >= 18 && ascii(0, 18) === "Kaydara FBX Binary") return "fbx";
+  // usdz and 3mf are zip archives under their own names
+  if (buf.length >= 4 && ascii(0, 4) === "PK\x03\x04") return ["usdz", "3mf", "zip"].includes(urlExt) ? urlExt : "zip";
+  return null;
+}
+
 const resolveRef = (ref) => String(ref ?? "").replace(/\$\{([A-Z0-9_]+)\}/g, (_, n) => process.env[n] ?? "");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -239,9 +252,12 @@ export default async function activate(ctx) {
         ctx.log.warn(`tripo output over ${DOWNLOAD_CAP / 1e6} MB, not saved: ${key} of ${taskId}`);
         continue;
       }
-      const urlExt = (new URL(url).pathname.split(".").pop() ?? "").toLowerCase();
+      const fromUrl = (new URL(url).pathname.split(".").pop() ?? "").toLowerCase();
+      const urlExt = fromUrl.length <= 5 && /^[a-z0-9]+$/.test(fromUrl) ? fromUrl : "";
       const type = (res.headers.get("content-type") ?? "").split(";")[0].trim();
-      const ext = urlExt && urlExt.length <= 5 && /^[a-z0-9]+$/.test(urlExt) ? urlExt : EXT_BY_TYPE[type] ?? "bin";
+      // the bytes decide: Tripo's «preview.webp» is a PNG, and a picture sent
+      // under the wrong type does not open
+      const ext = sniff(buf, urlExt) ?? (urlExt || EXT_BY_TYPE[type] || "bin");
       const rel = path.posix.join(folder, `${op.replace(/_/g, "-")}-${tail}${suffixOf(key)}.${ext}`);
       const abs = path.join(ctx.paths.workspaceArtifacts(call.workspace), rel);
       fs.mkdirSync(path.dirname(abs), { recursive: true });

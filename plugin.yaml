@@ -5,7 +5,7 @@
 # when a long task lands — in-process facilities a catalog "tool" plugin
 # (out of process, flat schemas) does not get.
 name: tripo
-version: 0.1.0
+version: 0.1.1
 kind: integration
 description: Tripo 3D for agents — models from text, an image or several views, then texture, rig, animation, retopology and format conversion. Results land in the task's artifacts.
 entry: index.mjs

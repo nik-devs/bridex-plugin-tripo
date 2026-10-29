@@ -33,8 +33,10 @@ globalThis.fetch = async (url, init = {}) => {
     return new Response("", { status: 200 });
   }
   if (u.host === "cdn.test") {
-    const types = { glb: "model/gltf-binary", webp: "image/webp", fbx: "application/octet-stream" };
-    return new Response(Buffer.from(`bytes of ${u.pathname}`), { status: 200, headers: { "content-type": types[u.pathname.split(".").pop()] ?? "application/octet-stream" } });
+    // like the real API: the model is a binary glTF, and «preview.webp» holds a PNG
+    const ext = u.pathname.split(".").pop();
+    const head = ext === "glb" ? "glTF" : ext === "webp" ? "\x89PNG\r\n\x1a\n" : "";
+    return new Response(Buffer.from(`${head}bytes of ${u.pathname}`, "latin1"), { status: 200, headers: { "content-type": ext === "webp" ? "image/webp" : "application/octet-stream" } });
   }
   if (u.host === "docs.test") {
     return new Response("# Retopology\n\n### face_limit\n\n```python\nprint('sdk')\n```\n\n```bash\ncurl ...\n```\n", { status: 200 });
@@ -128,12 +130,13 @@ test("multiview → P2: local views are uploaded, the task is waited for, the GL
   assert.deepEqual(puts, ["/put/1", "/put/2"]);
   assert.equal(r.data.status, "success");
   const tail = sent.task_id.replace(/^task_/, "").slice(-10);
-  assert.deepEqual(r.data.artifacts, [`t-car/multiview-to-model-${tail}.glb`, `t-car/multiview-to-model-${tail}-preview.webp`]);
-  assert.equal(fs.readFileSync(path.join(art, r.data.artifacts[0]), "utf8"), `bytes of /${sent.task_id}/model.glb`);
+  // the preview is saved under what its bytes are — a PNG behind a .webp link
+  assert.deepEqual(r.data.artifacts, [`t-car/multiview-to-model-${tail}.glb`, `t-car/multiview-to-model-${tail}-preview.png`]);
+  assert.equal(fs.readFileSync(path.join(art, r.data.artifacts[0]), "latin1"), `glTFbytes of /${sent.task_id}/model.glb`);
   assert.equal(r.data.credits_consumed, 30);
   assert.equal(r.data.riggable, true, "facts of the output ride along");
   assert.equal(r.content[1].type, "image", "the preview is shown in the reply");
-  assert.equal(r.content[1].mimeType, "image/webp");
+  assert.equal(r.content[1].mimeType, "image/png");
   assert.deepEqual(usage.at(-1), { workspace: "lab", agent: "modeler", kind: "tripo", model: "multiview_to_model P2-20260801", costUsd: 0.3, units: 30, unit: "credits", taskId: "t-car", ref: sent.task_id });
   assert.equal(annotated.at(-2).meta.generation.provider, "Tripo");
   assert.deepEqual(annotated.at(-2).meta.generation.params.inputs, [{ front: "artifacts/refs/front.png" }, { left: "artifacts/refs/left.png" }], "provenance names the local files");
